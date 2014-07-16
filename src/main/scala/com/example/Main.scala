@@ -66,7 +66,9 @@ object Main extends App with SimpleRoutingApp with UserAuthenticator with Securi
   val securityService = system.actorOf(SecurityService.props, "security")
   val securityServiceView = system.actorOf(SecurityServiceView.props, "securityServiceView")
 
-  startServer(interface = "localhost", port = 8080) {
+  val config = Config(system)
+
+  startServer(interface = config.bindAddress, port = config.bindPort) {
     pathPrefix("api") {
       securityRoute
     } ~

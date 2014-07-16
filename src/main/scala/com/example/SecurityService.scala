@@ -1,22 +1,20 @@
 package com.example
 
+import java.util.Date
 import spray.routing.authentication.UserPass
-import akka.actor.{ActorRef, Actor, ActorLogging, Props}
+import akka.actor._
 import org.apache.shiro.crypto.SecureRandomNumberGenerator
 import org.apache.shiro.util.ByteSource
 import org.apache.shiro.crypto.hash.Sha512Hash
 import spray.httpx.SprayJsonSupport
 import spray.json.DefaultJsonProtocol
-import akka.persistence.{Persistent, View, EventsourcedProcessor}
-import java.util.Date
+import akka.persistence.{PersistentActor, PersistentView}
 import scala.util.Failure
+import scala.concurrent.duration._
 
 object SecurityService {
   // business types
-  case class User(username: String, password: String) {
-    require(!username.isEmpty, "username is mandatory")
-    require(!password.isEmpty, "password is mandatory")
-  }
+  case class User(username: String, password: String)
 
   object JsonMarshaller extends DefaultJsonProtocol with SprayJsonSupport {
     implicit val secServiceUserFormat = jsonFormat2(SecurityService.User)
@@ -29,15 +27,15 @@ object SecurityService {
   case class Authenticate(userPass: Option[UserPass])
 
   // events
-  case class UserCreated(date: Date, user: SecurityService.User)
+  case class UserCreated(timestamp: Long, user: SecurityService.User)
 
   def props = Props(new SecurityService)
 }
 
-class SecurityService extends EventsourcedProcessor with ActorLogging {
+class SecurityService extends PersistentActor with ActorLogging {
   import SecurityService._
 
-  override def processorId: String = "SecurityService"
+  override def persistenceId: String =  "SecurityService"
 
   def handleCreateUser(event: UserCreated): ActorRef = {
     val UserCreated(_, User(username, _)) = event
@@ -70,7 +68,7 @@ class SecurityService extends EventsourcedProcessor with ActorLogging {
 
     case AddUser(user) => context.child(user.username) match {
       case Some(userActor) => userActor ! AppUser.UpdateUser(user)
-      case None => persist(SecurityService.UserCreated(new Date(), user))(handleCreateUserAndSendCommand)
+      case None => persist(SecurityService.UserCreated(new Date().getTime, user))(handleCreateUserAndSendCommand)
     }
   }
 }
@@ -82,9 +80,9 @@ object AppUser {
   case class CreateUser(user: SecurityService.User)
 
   // events
-  case class Deleted(date: Date, username: String)
-  case class UserCreated(date: Date, user: SecurityService.User)
-  case class UserUpdated(date: Date, user: SecurityService.User)
+  case class Deleted(timestamp: Long, username: String)
+  case class UserCreated(timestamp: Long, user: SecurityService.User)
+  case class UserUpdated(timestamp: Long, user: SecurityService.User)
 
   def props(username: String) = Props(new AppUser(username))
 
@@ -103,20 +101,20 @@ object AppUser {
   }
 }
 
-class AppUser(username: String) extends EventsourcedProcessor with ActorLogging {
+class AppUser(username: String) extends PersistentActor with ActorLogging {
   import AppUser._
-  override def processorId: String = username
   log.info("Creating AppUser: {}", username)
+  override def persistenceId: String = username
 
-  var updated: Date = _
+  var updated: Long = _
   var deleted = false
   var passwordHash: String = _
   var passwordSalt: String = _
 
-  def updateUser(date: Date, password: String) {
+  def updateUser(timestamp: Long, password: String) {
     log.info("Updating user")
     val generatedPassword = generatePassword(username, password)
-    updated = date
+    updated = timestamp
     passwordHash = generatedPassword._1
     passwordSalt = generatedPassword._2
   }
@@ -144,9 +142,9 @@ class AppUser(username: String) extends EventsourcedProcessor with ActorLogging 
   }
 
   override def receiveCommand: Receive = {
-    case AppUser.Delete => persist(AppUser.Deleted(new Date, username))(handleDeleted)
-    case AppUser.CreateUser(user) => persist(AppUser.UserCreated(new Date, user))(handleUserCreated)
-    case AppUser.UpdateUser(user) => persist(AppUser.UserUpdated(new Date, user))(handleUserUpdated)
+    case AppUser.Delete => persist(AppUser.Deleted(new Date().getTime, username))(handleDeleted)
+    case AppUser.CreateUser(user) => persist(AppUser.UserCreated(new Date().getTime, user))(handleUserCreated)
+    case AppUser.UpdateUser(user) => persist(AppUser.UserUpdated(new Date().getTime, user))(handleUserUpdated)
     case SecurityService.Authenticate(userPass) =>
       sender ! userPass.flatMap { up =>
         log.info("Authenticating: {}", up.user)
@@ -162,41 +160,45 @@ object SecurityServiceView {
 
   // commands
   case object GetAllUsers
+  case object DumpUsers
   case class GetUserByName(username: String)
 
   def props = Props(new SecurityServiceView)
 }
 
-class SecurityServiceView extends View with ActorLogging {
+class SecurityServiceView extends PersistentView with ActorLogging {
   import SecurityServiceView._
   log.info("Creating SecurityServiceView")
-  override def processorId: String = "SecurityService"
+  override def persistenceId: String = "SecurityService"
   override def viewId: String = "SecurityServiceView"
 
   var users = List.empty[SecurityServiceView.User]
 
   override def receive: Actor.Receive = {
-    case Persistent(SecurityService.UserCreated(date, user), _) =>
+    case SecurityService.UserCreated(date, user) if isPersistent =>
       log.info("Creating UserView: {}", user.username)
       context.actorOf(Props(new UserView(user.username)), user.username)
       users = SecurityServiceView.User(user.username) :: users
-    case Persistent(AppUser.UserCreated(_, _), _) =>
-    case Persistent(AppUser.UserUpdated(_, _), _) =>
-    case Persistent(AppUser.Deleted(_, username), _) =>
+    case AppUser.UserCreated(_, _) if isPersistent =>
+    case AppUser.UserUpdated(_, _) if isPersistent =>
+    case AppUser.Deleted(_, username) if isPersistent =>
       log.info("Deleting user: {}", username)
       users = users.filterNot { user => user.username.equals(username) }
+
     case GetAllUsers => sender ! users
     case GetUserByName(username) => sender ! users.find { user => user.username.equals(username) }
+    case DumpUsers => log.info("Dump: {}", users.mkString(","))
     case msg @ _ => log.warning("Could not handle message: {}", msg)
   }
 }
 
-class UserView(username: String) extends View with ActorLogging {
-  log.info("Creating UserView: {}", username)
-  override def processorId: String = username
+class UserView(username: String) extends PersistentView with ActorLogging {
+  log.info("Creating User PersistentView: {}", username)
+  override def persistenceId: String = username
+  override def viewId: String = s"$username-view"
 
   override def receive: Actor.Receive = {
-    case msg @ _ =>
+    case msg @ _ if isPersistent =>
       log.info("Forwarding message: {}", msg)
       context.parent forward msg
   }
