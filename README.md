@@ -19,11 +19,12 @@ hours to work through the guide on how to use this great piece of software.
 ## Run the image
 When you have Docker installed, you can launch a [containerized version](https://registry.hub.docker.com/u/dnvriend/spray-basic-authentication-jdbc/). 
 However, this example uses two containers, one that will run the Postgres database and one that will run the example application. Let's first run the
-Docker training/postgresql container:
+Docker [training/postgresql](https://github.com/docker-training/postgres/blob/master/Dockerfile) container:
 
     $ sudo docker run -d --name db training/postgres 
 
-The Docker training/postgresql container runs the database we will use for storing the events from our example. The credentials are:
+The Docker [training/postgresql](https://github.com/docker-training/postgres/blob/master/Dockerfile) container runs the database we will use for storing 
+the events from our example. The credentials are:
  
     username: docker
     password: docker
