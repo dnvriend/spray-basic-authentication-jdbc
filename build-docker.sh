@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo docker build --rm -t dnvriend/spray-basic-authentication-jdbc .
+sudo docker build --rm -t dnvriend/spray-ba-jdbc .

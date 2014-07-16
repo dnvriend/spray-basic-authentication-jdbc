@@ -14,10 +14,10 @@ and basic authentication to authenticate access to our precious resource.
 
 # Docker
 This example can be run using [Docker](http://docker.io) and I would strongly advice using Docker and just take a few 
-hours to work through the guide on how to use this great piece of software.
+hours to work through the guide on how to use this *great* piece of software.
 
 ## Run the image
-When you have Docker installed, you can launch a [containerized version](https://registry.hub.docker.com/u/dnvriend/spray-basic-authentication-jdbc/). 
+When you have Docker installed, you can launch a [containerized version](https://registry.hub.docker.com/u/dnvriend/spray-ba-jdbc/). 
 However, this example uses two containers, one that will run the Postgres database and one that will run the example application. Let's first run the
 Docker [training/postgresql](https://github.com/docker-training/postgres/blob/master/Dockerfile) container:
 
@@ -62,7 +62,7 @@ Then type the following commands:
 
 Finally we can launch the example container:
 
-    $ sudo docker run -d -P --link db:db --name spray-basic-authentication-jdbc dnvriend/spray-basic-authentication-jdbc
+    $ sudo docker run -d -P --link db:db --name spray-ba-jdbc dnvriend/spray-ba-jdbc
 
 Check which local port has been mapped to the Vagrant VM:
     
@@ -70,26 +70,26 @@ Check which local port has been mapped to the Vagrant VM:
     
 And note the entries in the PORTS column eg:
 
-    CONTAINER ID        IMAGE                                             COMMAND                CREATED             STATUS              PORTS                     NAMES
-    592cbd800b0f        dnvriend/spray-basic-authentication-jdbc:latest   /bin/sh -c java -jar   2 seconds ago       Up 1 seconds        0.0.0.0:49156->8080/tcp   spray-basic-authentication-jdbc
-    28a8c28a2726        training/postgres:latest                          su postgres -c /usr/   About an hour ago   Up 37 minutes       5432/tcp                  db,spray-basic-authentication-jdbc/db,ubuntu/db,web/db
+    CONTAINER ID        IMAGE                           COMMAND                CREATED              STATUS              PORTS                     NAMES
+    10bde5de0923        dnvriend/spray-ba-jdbc:latest   /bin/sh -c java -jar   About a minute ago   Up About a minute   0.0.0.0:49158->8080/tcp   spray-ba-jdbc
+    28a8c28a2726        training/postgres:latest        su postgres -c /usr/   2 hours ago          Up 53 minutes       5432/tcp                  db,spray-ba-jdbc/db,web/db
 
-In this example, the local port of my Vagrant VM has been mapped to port 49156 to the port of the example application, and that is 8080. 
+In this example, the local port of my Vagrant VM has been mapped to port 49158 to the port of the example application, and that is 8080. 
 Point the browser to the following url (change the port to your mapped port):
 
-    http://192.168.99.99:49156/web/index.html    
+    http://192.168.99.99:49158/web/index.html    
     
 To view the log output:
     
-    $ sudo docker logs -f spray-basic-authentication-jdbc
+    $ sudo docker logs -f spray-ba-jdbc
 
 To stop the container:
 
-    $ sudo docker stop spray-basic-authentication-jdbc
+    $ sudo docker stop spray-ba-jdbc
     
 To remove the image from your computer:
     
-    $ sudo docker rm -f spray-basic-authentication-jdbc
+    $ sudo docker rm -f spray-ba-jdbc
     $ sudo docker rm -f tutorial/postgres
     $ sudo docker rm -f ubuntu
     
